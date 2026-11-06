@@ -13,13 +13,13 @@ cat > "$P/appsscript.json" <<'JSON'
  "oauthScopes":["https://www.googleapis.com/auth/spreadsheets"],
  "webapp":{"access":"ANYONE_ANONYMOUS","executeAs":"USER_DEPLOYING"}}
 JSON
-echo "== 1/5 Ative a 'Google Apps Script API' (abrindo a página; troque para ATIVADO e volte aqui)"
+echo "== 1/5 Ative a 'Google Apps Script API' (deixe ATIVADO na página aberta; o script segue sozinho em 20 s)"
 xdg-open "https://script.google.com/home/usersettings" >/dev/null 2>&1 || true
-read -r -p "Já ativou? (Enter) " _
+sleep 20
 echo "== 2/5 Login no Google (vai abrir o navegador; autorize com a conta dona da planilha)"
-$CLASP login
+if [ -f "$HOME/.clasprc.json" ]; then echo "(já logado no clasp)"; else $CLASP login; fi
 echo "== 3/5 Criando o projeto ligado à planilha e enviando o código"
-( cd "$P" && $CLASP create --type sheets --parentId "$SHEET_ID" --title "Revisão do catálogo (envio)" --rootDir . && $CLASP push -f )
+( cd "$P" && $CLASP create --type sheets --parentId "$SHEET_ID" --title "Revisão do catálogo (envio)" --rootDir . && $CLASP push -f ) || { echo "FALHOU. Se a mensagem fala da API do Apps Script, ative-a em https://script.google.com/home/usersettings e rode de novo."; exit 1; }
 echo "== 4/5 Publicando como app da Web"
 ( cd "$P" && $CLASP deploy --description "v1" )
 DEP=$(cd "$P" && $CLASP deployments | grep -oE 'AKfy[A-Za-z0-9_-]+' | tail -1)
@@ -28,9 +28,13 @@ URL="https://script.google.com/macros/s/$DEP/exec"
 echo "URL: $URL"
 echo "   Abrindo a URL: se o Google pedir autorização, autorize (Avançado > Acessar > Permitir). Depois volte aqui."
 xdg-open "$URL" >/dev/null 2>&1 || true
-read -r -p "Autorizou? (Enter) " _
+echo "   Aguardando a autorização (até 4 min)..."
+R=""
+for i in $(seq 1 48); do R=$(curl -sL "$URL" || true); [ "$R" = "ok" ] && break; sleep 5; done
+[ "$R" = "ok" ] || { echo "Autorização não detectada. Abra $URL, autorize e depois rode ./configurar-url.sh \"$URL\" e ./publicar.sh."; exit 1; }
 echo "   Teste de envio (grava 1 linha '_teste_instalacao' na planilha; pode apagar depois):"
 curl -sL -X POST -H "Content-Type: text/plain" -d '{"linhas":[{"revisor":"_teste_instalacao","enviado_em":"teste","id":"teste","tipo":"produto","setor":"teste","nome":"teste","texto":"pode apagar"}]}' "$URL"; echo
-echo "== 5/5 Configurando a página e publicando no GitHub Pages"
+echo "== 5/5 Configurando a página"
 ./configurar-url.sh "$URL"
-./publicar.sh
+echo "GitHub logado: $(gh api user -q .login 2>/dev/null || echo nenhum)"
+echo "Se essa conta for a sua, rode:  ! ~/emporio-orquestra/revisao-site/publicar.sh revisao-catalogo sim"
