@@ -46,7 +46,9 @@ const KEY = "revisao-catalogo-v1";
 let resp = {}; try { resp = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
 const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(resp)); } catch (e) {} };
 const ST = {ok:["Foto conferida","#15803d"],provavel:["Foto provável — conferir","#b45309"],gramatura:["Foto de gramatura diferente (não ligada)","#c2410c"],falta:["Sem foto","#b91c1c"],semproduto:["Foto sem produto no catálogo","#6d28d9"]};
-let setor = DADOS.setores[0];
+const ATEN = "⚠ Sem foto / a conferir";
+const precisa = i => i.tipo==="produto" && i.st!=="ok";
+let setor = ATEN;
 const $ = id => document.getElementById(id);
 const nomeEl = $("nome"); try { nomeEl.value = localStorage.getItem(KEY+"-nome") || ""; } catch (e) {}
 nomeEl.oninput = () => { try { localStorage.setItem(KEY+"-nome", nomeEl.value); } catch (e) {} };
@@ -54,10 +56,10 @@ const respondido = r => r && (r.certo || r.foto || r.desc || r.preco || r.gram |
 function feito(i){ return respondido(resp[i.id]); }
 function render(){
   const q = $("busca").value.toLowerCase(), so = $("pend").checked;
-  $("tabs").innerHTML = DADOS.setores.map(s => { const its = DADOS.itens.filter(i=>i.setor===s); const f = its.filter(feito).length;
+  $("tabs").innerHTML = [ATEN].concat(DADOS.setores).map(s => { const its = s===ATEN ? DADOS.itens.filter(precisa) : DADOS.itens.filter(i=>i.setor===s); const f = its.filter(feito).length;
     return `<button class="${s===setor?'on':''}" data-s="${s}">${s} (${f}/${its.length})</button>`; }).join("");
   $("tabs").querySelectorAll("button").forEach(b => b.onclick = () => { setor = b.dataset.s; render(); scrollTo(0,0); });
-  const its = DADOS.itens.filter(i => (q ? i.nome.toLowerCase().includes(q) : i.setor===setor) && (!so || !feito(i)));
+  const its = DADOS.itens.filter(i => (q ? i.nome.toLowerCase().includes(q) : (setor===ATEN ? precisa(i) : i.setor===setor)) && (!so || !feito(i)));
   $("lista").innerHTML = its.map(card).join("") || "<p class=mut>Nada para mostrar.</p>";
   const tot = DADOS.itens.length, f = DADOS.itens.filter(feito).length;
   $("prog").style.width = (100*f/tot)+"%"; $("progtxt").textContent = f+" de "+tot;
