@@ -20,6 +20,7 @@ main{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minma
 .chk{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:14px}.chk label{display:flex;gap:4px;align-items:center}
 .c textarea{width:100%;margin-top:6px;min-height:34px;display:none}.c.erro textarea{display:block}
 .price{font-weight:600}.ob{background:#fef3c7;color:#78350f;padding:4px 6px;border-radius:6px;font-size:13px;margin-top:4px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#166534;color:#fff;padding:10px 14px;border-radius:8px;display:none;z-index:10;box-shadow:0 4px 14px #0006}#toast button{margin-left:10px;background:#fff;color:#166534;border:0;font-weight:600}
 #zoom{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:9}#zoom img{max-width:92vw;max-height:92vh;background:#fff}
 .fl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 0 2px}.chip{border:1px solid var(--bd);border-radius:16px;padding:4px 11px;font-size:13px;white-space:nowrap}.chip.on{color:#fff;border-color:transparent}.chip b{font-weight:600}select{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)}.sec{grid-column:1/-1;margin:10px 0 0;font-size:15px;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px}
 .aviso{margin:12px 16px 0;padding:10px;border-radius:8px;background:var(--card);border:1px solid var(--bd);font-size:14px}
@@ -39,6 +40,7 @@ main{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minma
 <div class="aviso">Como usar: veja cada cartão. Se estiver tudo certo, marque <b>Tudo certo</b>. Se algo estiver errado, marque o que está errado e escreva o certo no campo que aparece. Seu progresso fica salvo neste aparelho; no fim clique em <b>Salvar e enviar</b> (pode enviar mais de uma vez).
 Esta lista mostra <b>só o que ainda falta ou está em dúvida</b> (kits e cestas ficam de fora); use o botão "Mostrar também os já conferidos" para ver o resto. Os preços de R$ 49,90 são provisórios — marque "Preço errado" quando for o caso. Produtos "Sem foto" estão sem imagem: marque "Tenho a foto" e envie a foto separadamente. Use os botões coloridos para filtrar por situação e o seletor para escolher o setor.</div>
 <main id="lista"></main>
+<div id="toast"></div>
 <div id="zoom"><img alt=""></div>
 <script>
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbwOZCAaCOkqbGW95HaRKOIkIbiwRFlfDZIzAjHvJhNVEQTtM95n-8S8w7Ugtgtj1EfP/exec";
@@ -48,7 +50,8 @@ let resp = {}; try { resp = JSON.parse(localStorage.getItem(KEY) || "{}"); } cat
 const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(resp)); } catch (e) {} };
 const ST = {ok:["Foto conferida","#15803d"],provavel:["Foto provável — conferir","#b45309"],gramatura:["Foto de gramatura diferente (não ligada)","#c2410c"],falta:["Sem foto","#b91c1c"],semproduto:["Foto sem produto no catálogo","#6d28d9"]};
 let fst = "todos", fset = "", mostrarOk = false;
-const vis = i => mostrarOk || i.st!=="ok";
+const est = i => (resp[i.id] && resp[i.id].certo) ? "ok" : i.st;
+const vis = i => mostrarOk || est(i)!=="ok";
 const $ = id => document.getElementById(id);
 const nomeEl = $("nome"); try { nomeEl.value = localStorage.getItem(KEY+"-nome") || ""; } catch (e) {}
 nomeEl.oninput = () => { try { localStorage.setItem(KEY+"-nome", nomeEl.value); } catch (e) {} };
@@ -61,11 +64,11 @@ function base(){ const q=$("busca").value.toLowerCase(); return DADOS.itens.filt
 function render(){
   const so = $("setor"); if(!so.options.length){ so.innerHTML = '<option value="">Todos os setores ('+DADOS.itens.length+')</option>'+DADOS.setores.map(x=>`<option value="${esc(x)}">${esc(x)} (${DADOS.itens.filter(i=>i.setor===x).length})</option>`).join(""); }
   const pool = DADOS.itens.filter(i => vis(i) && (!fset||i.setor===fset));
-  $("vok").textContent = mostrarOk ? "Esconder os já conferidos" : "Mostrar também os já conferidos ("+DADOS.itens.filter(i=>i.st==="ok").length+")";
+  $("vok").textContent = mostrarOk ? "Esconder os já conferidos" : "Mostrar também os já conferidos ("+DADOS.itens.filter(i=>est(i)==="ok").length+")";
   const chip = (k,t,c,n) => `<button class="chip ${fst===k?'on':''}" style="${fst===k?'background:'+c:''}" data-s="${k}">${t} <b>${n}</b></button>`;
-  $("chips").innerHTML = chip("todos","Todos","#1d4ed8",pool.length)+ORD.filter(k=>pool.some(i=>i.st===k)).map(k=>chip(k,ST[k][0],ST[k][1],pool.filter(i=>i.st===k).length)).join("");
+  $("chips").innerHTML = chip("todos","Todos","#1d4ed8",pool.length)+ORD.filter(k=>pool.some(i=>est(i)===k)).map(k=>chip(k,ST[k][0],ST[k][1],pool.filter(i=>est(i)===k).length)).join("");
   $("chips").querySelectorAll("button").forEach(b => b.onclick = () => { fst = b.dataset.s; render(); scrollTo(0,0); });
-  let its = base().filter(i => fst==="todos"||i.st===fst);
+  let its = base().filter(i => fst==="todos"||est(i)===fst);
   const o = $("ordem").value;
   its.sort((a,b) => o==="preco" ? b.preco-a.preco : o==="nome" ? a.nome.localeCompare(b.nome,"pt-BR") : (DADOS.setores.indexOf(a.setor)-DADOS.setores.indexOf(b.setor)) || ORD.indexOf(a.st)-ORD.indexOf(b.st) || a.nome.localeCompare(b.nome,"pt-BR"));
   let ult = null, h = "";
@@ -75,7 +78,7 @@ function render(){
   $("prog").style.width = (100*f/tot)+"%"; $("progtxt").textContent = f+" de "+tot+" respondidos · mostrando "+its.length;
 }
 function card(i){
-  const r = resp[i.id] || {}, [lbl,cor] = ST[i.st];
+  const r = resp[i.id] || {}; let [lbl,cor] = ST[i.st]; if (r.certo && i.st!=="ok") { lbl = "Tudo certo (marcado por você)"; cor = "#15803d"; }
   const ck = (k,t) => `<label><input type="checkbox" data-id="${i.id}" data-k="${k}" ${r[k]?'checked':''}> ${t}</label>`;
   const img = i.foto ? `<img loading="lazy" src="${i.foto}" alt="" onclick="zoom('${i.foto}')">` : `<div class="nf">sem foto</div>`;
   let ops;
@@ -94,8 +97,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 function zoom(src){ const z=$("zoom"); z.firstElementChild.src=src; z.style.display="flex"; } $("zoom").onclick = () => $("zoom").style.display="none";
 $("lista").addEventListener("change", e => { const t = e.target, id = t.dataset.id; if(!id) return; const r = resp[id] = resp[id] || {};
   if (t.type==="checkbox") { r[t.dataset.k] = t.checked; if (t.dataset.k==="certo" && t.checked) r.foto=r.desc=r.preco=r.gram=false;
-    else if (t.dataset.k!=="certo" && t.checked) r.certo=false; render(); } else r.txt = t.value; salvar(); });
+    else if (t.dataset.k!=="certo" && t.checked) r.certo=false; render(); if (t.dataset.k==="certo" && t.checked && !mostrarOk) aviso(id); } else r.txt = t.value; salvar(); });
 $("lista").addEventListener("input", e => { if (e.target.tagName==="TEXTAREA") { const id=e.target.dataset.id; (resp[id]=resp[id]||{}).txt=e.target.value; salvar(); } });
+let tt; function aviso(id){ const T=$("toast"); T.innerHTML='✅ Movido para "já conferidos" <button>Desfazer</button>'; T.style.display="block";
+  T.querySelector("button").onclick = () => { resp[id].certo=false; salvar(); T.style.display="none"; render(); }; clearTimeout(tt); tt=setTimeout(()=>T.style.display="none",5000); }
 $("busca").oninput = render; $("pend").onchange = render; $("ordem").onchange = render; $("vok").onclick = () => { mostrarOk = !mostrarOk; if(!mostrarOk && fst==="ok") fst="todos"; render(); }; $("setor").onchange = () => { fset = $("setor").value; render(); };
 function linhas(){ const nome = nomeEl.value.trim(), agora = new Date().toISOString();
   return DADOS.itens.filter(feito).map(i => { const r = resp[i.id]; return {revisor:nome, enviado_em:agora, id:i.id, tipo:i.tipo, setor:i.setor, nome:i.nome,
